@@ -18,6 +18,8 @@ LANGFUSE_PROMPT_NAMES = {
     "catalog_system":   "gift-concierge-catalog-system",
     "logistics_system": "gift-concierge-logistics-system",
     "chitchat_system":  "gift-concierge-chitchat-system",
+    "reflect_system":   "gift-concierge-reflect-system",
+    "revise_system":    "gift-concierge-revise-system",
 }
 
 # ---------------------------------------------------------------------------
@@ -249,3 +251,89 @@ def build_preference_extract_prompt(message: str) -> tuple[str, str]:
         _PREFERENCE_EXTRACT_SYSTEM,
         _PREFERENCE_EXTRACT_USER.format(message=message),
     )
+
+
+# ---------------------------------------------------------------------------
+# Reflection Loop — Step 2: Reflect, Step 3: Revise
+# ---------------------------------------------------------------------------
+
+_REFLECT_SYSTEM_FALLBACK = """\
+You are a gift safety checker for kapruka.com.
+
+You will be given a gift recommendation draft and a recipient profile.
+Your job is to check whether the recommended products violate the recipient's
+dislikes or allergies listed in their profile.
+
+RULES:
+- Check ONLY against the dislikes and notes (allergies) in the profile
+- Do NOT critique personal taste, price, or style choices
+- If you find violations, list them briefly: "Product X contains Y which the recipient dislikes"
+- If no violations found, respond with exactly: NO_VIOLATIONS
+
+Keep your response under 5 sentences."""
+
+_REFLECT_USER_TEMPLATE = """\
+Recipient profile: {profile_block}
+
+Draft recommendation:
+{draft_reply}
+
+Check for violations:"""
+
+_REVISE_SYSTEM_FALLBACK = """\
+You are a gift recommendation specialist for kapruka.com.
+
+You have a draft recommendation that has been flagged for violations against
+the recipient's profile. Your job is to rewrite the recommendation using only
+the provided product list, avoiding the flagged items.
+
+RULES:
+- Keep the same warm, personal tone as the original
+- Only recommend products from the provided candidate list
+- Do not mention any product that was flagged in the critique
+- If no safe products remain, apologise and ask for more details
+- Include price in LKR and product URL for each recommendation"""
+
+_REVISE_USER_TEMPLATE = """\
+Recipient profile: {profile_block}
+
+Original request: {query}
+
+Retrieved product candidates:
+{products_block}
+
+Critique (violations found):
+{critique}
+
+Write a revised recommendation that avoids all flagged products:"""
+
+
+def build_reflect_prompt(draft_reply: str, profile_block: str) -> tuple[str, str]:
+    system = fetch_prompt(
+        LANGFUSE_PROMPT_NAMES["reflect_system"],
+        fallback=_REFLECT_SYSTEM_FALLBACK,
+    )
+    user = _REFLECT_USER_TEMPLATE.format(
+        profile_block=profile_block,
+        draft_reply=draft_reply,
+    )
+    return system, user
+
+
+def build_revise_prompt(
+    critique: str,
+    profile_block: str,
+    products_block: str,
+    query: str,
+) -> tuple[str, str]:
+    system = fetch_prompt(
+        LANGFUSE_PROMPT_NAMES["revise_system"],
+        fallback=_REVISE_SYSTEM_FALLBACK,
+    )
+    user = _REVISE_USER_TEMPLATE.format(
+        profile_block=profile_block,
+        query=query,
+        products_block=products_block,
+        critique=critique,
+    )
+    return system, user

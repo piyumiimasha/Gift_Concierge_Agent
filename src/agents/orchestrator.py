@@ -242,9 +242,11 @@ class GiftOrchestrator:
 
         response = self._get_catalog().recommend(message, profile, history)
         metadata = {
-            "products_retrieved": len(response.products_shown),
-            "query_enriched": response.query_used,
-            "recipient": response.recipient_name,
+            "products_retrieved":   len(response.products_shown),
+            "query_enriched":       response.query_used,
+            "recipient":            response.recipient_name,
+            "reflection_triggered": response.reflection_triggered,
+            "violations_found":     response.violations_found,
         }
         return response.reply, metadata
 

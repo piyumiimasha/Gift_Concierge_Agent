@@ -8,7 +8,9 @@ Flow
 3. Semantic search via QdrantRAGStore
 4. Post-filter: remove disliked and previously gifted products
 5. Format product candidates for LLM context
-6. Groq LLM selects the 2–3 best matches and writes a warm recommendation
+6. Groq LLM selects the 2–3 best matches and writes a warm recommendation (Draft)
+7. Reflection: critique draft against recipient dislikes/allergies
+8. Revise: if violations found, rewrite recommendation avoiding flagged products
 """
 
 from __future__ import annotations
@@ -21,7 +23,11 @@ from dotenv import load_dotenv
 from groq import Groq
 from loguru import logger
 
-from agents.prompts.agent_prompts import build_catalog_prompt
+from agents.prompts.agent_prompts import (
+    build_catalog_prompt,
+    build_reflect_prompt,
+    build_revise_prompt,
+)
 from infastructure.observability import observe, update_current_observation
 from memory.rag_store import QdrantRAGStore
 from memory.schemas import ConversationTurn, ProductSearchResult, RecipientProfile
@@ -73,10 +79,12 @@ _NO_RESULTS_REPLY = (
 
 @dataclass
 class CatalogResponse:
-    reply:           str
-    products_shown:  List[ProductSearchResult] = field(default_factory=list)
-    query_used:      str = ""
-    recipient_name:  Optional[str] = None
+    reply:                str
+    products_shown:       List[ProductSearchResult] = field(default_factory=list)
+    query_used:           str = ""
+    recipient_name:       Optional[str] = None
+    reflection_triggered: bool = False
+    violations_found:     bool = False
 
 
 class CatalogAgent:
@@ -181,13 +189,84 @@ class CatalogAgent:
             logger.error("CatalogAgent LLM call failed: {}", exc)
             reply = _plain_recommendation(results[:3])
 
-        update_current_observation(output=reply[:200])
+        # Step 6 — Reflection loop (only when profile has dislikes or allergy notes)
+        reflection_triggered = False
+        violations_found = False
+
+        if profile and (profile.dislikes or profile.notes):
+            reflection_triggered = True
+            try:
+                critique, has_violations = self._reflect(reply, profile)
+                logger.info(
+                    "Reflection: violations={} — {}", has_violations, critique[:80]
+                )
+                if has_violations:
+                    violations_found = True
+                    reply = self._revise(critique, profile, products_block, message)
+            except Exception as exc:
+                logger.warning("Reflection loop failed: {} — keeping draft", exc)
+
+        update_current_observation(
+            output=reply[:200],
+            metadata={
+                "reflection_triggered": reflection_triggered,
+                "violations_found": violations_found,
+            },
+        )
         return CatalogResponse(
             reply=reply,
             products_shown=results,
             query_used=enriched,
             recipient_name=profile.name if profile else None,
+            reflection_triggered=reflection_triggered,
+            violations_found=violations_found,
         )
+
+    # ------------------------------------------------------------------
+    # Reflection loop
+    # ------------------------------------------------------------------
+
+    def _reflect(
+        self, draft_reply: str, profile: RecipientProfile
+    ) -> tuple[str, bool]:
+        """Critique draft against recipient dislikes/allergies. Returns (critique, has_violations)."""
+        profile_block = profile.preference_summary()
+        system, user = build_reflect_prompt(draft_reply, profile_block)
+        response = self._client.chat.completions.create(
+            model=self.model,
+            temperature=0.0,
+            messages=[
+                {"role": "system", "content": system},
+                {"role": "user",   "content": user},
+            ],
+            max_tokens=200,
+        )
+        critique = response.choices[0].message.content or "NO_VIOLATIONS"
+        has_violations = "NO_VIOLATIONS" not in critique.upper()
+        return critique, has_violations
+
+    def _revise(
+        self,
+        critique: str,
+        profile: RecipientProfile,
+        products_block: str,
+        original_message: str,
+    ) -> str:
+        """Rewrite the recommendation avoiding products flagged in the critique."""
+        profile_block = profile.preference_summary()
+        system, user = build_revise_prompt(
+            critique, profile_block, products_block, original_message
+        )
+        response = self._client.chat.completions.create(
+            model=self.model,
+            temperature=self.temperature,
+            messages=[
+                {"role": "system", "content": system},
+                {"role": "user",   "content": user},
+            ],
+            max_tokens=600,
+        )
+        return response.choices[0].message.content or ""
 
     # ------------------------------------------------------------------
     # Query enrichment
