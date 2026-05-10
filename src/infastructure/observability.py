@@ -136,7 +136,7 @@ def update_current_observation(**kwargs: Any) -> None:
 # ---------------------------------------------------------------------------
 
 def fetch_prompt(
-    name: str,
+    prompt_name: str,
     fallback: str,
     **variables: Any,
 ) -> str:
@@ -152,7 +152,7 @@ def fetch_prompt(
 
     Parameters
     ----------
-    name:
+    prompt_name:
         The prompt name as created in LangFuse → Prompts dashboard.
     fallback:
         Local template string used when LangFuse is unavailable.
@@ -175,11 +175,11 @@ def fetch_prompt(
     lf = _get_langfuse()
     if lf is not None:
         try:
-            prompt_obj = lf.get_prompt(name)
+            prompt_obj = lf.get_prompt(prompt_name)
             return prompt_obj.compile(**variables)
         except Exception as exc:
             logger.debug(
-                "fetch_prompt('{}') fell back to local: {}", name, exc
+                "fetch_prompt('{}') fell back to local: {}", prompt_name, exc
             )
 
     # Local fallback — interpolate Python {variable} placeholders
