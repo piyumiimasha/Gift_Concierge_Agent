@@ -1,0 +1,530 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Gift Concierge — kapruka.com</title>
+<style>
+  /* ── Reset & Base ───────────────────────────────────────── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --primary:    #1a73e8;
+    --primary-dk: #1557b0;
+    --green:      #34a853;
+    --surface:    #ffffff;
+    --bg:         #f0f4f9;
+    --border:     #e0e7ef;
+    --text:       #1a1a2e;
+    --muted:      #6b7c93;
+    --step-bg:    #eef4ff;
+    --step-done:  #e6f4ea;
+    --radius:     16px;
+    --shadow:     0 2px 12px rgba(0,0,0,.10);
+  }
+
+  html, body { height: 100%; font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); }
+
+  /* ── Layout ─────────────────────────────────────────────── */
+  .shell {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    max-width: 860px;
+    margin: 0 auto;
+    background: var(--surface);
+    box-shadow: var(--shadow);
+  }
+
+  /* ── Header ─────────────────────────────────────────────── */
+  header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 20px;
+    background: var(--primary);
+    color: #fff;
+    flex-shrink: 0;
+  }
+  .header-icon { font-size: 28px; line-height: 1; }
+  .header-title { font-size: 18px; font-weight: 700; letter-spacing: .3px; }
+  .header-sub   { font-size: 12px; opacity: .8; }
+  .header-badge {
+    margin-left: auto;
+    background: rgba(255,255,255,.2);
+    border-radius: 20px;
+    padding: 3px 12px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: .5px;
+  }
+
+  /* ── Chat area ───────────────────────────────────────────── */
+  #chat {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px 20px 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    scroll-behavior: smooth;
+  }
+
+  /* ── Messages ────────────────────────────────────────────── */
+  .msg { display: flex; gap: 10px; max-width: 82%; }
+  .msg.user  { align-self: flex-end; flex-direction: row-reverse; }
+  .msg.agent { align-self: flex-start; }
+
+  .avatar {
+    width: 34px; height: 34px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px;
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+  .msg.user  .avatar { background: var(--primary); color: #fff; }
+  .msg.agent .avatar { background: #f3e8ff; color: #7c3aed; }
+
+  .bubble {
+    padding: 12px 16px;
+    border-radius: var(--radius);
+    line-height: 1.55;
+    font-size: 14.5px;
+    word-break: break-word;
+  }
+  .msg.user  .bubble {
+    background: var(--primary);
+    color: #fff;
+    border-bottom-right-radius: 4px;
+  }
+  .msg.agent .bubble {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-bottom-left-radius: 4px;
+    box-shadow: 0 1px 4px rgba(0,0,0,.07);
+  }
+
+  /* ── Step pills ──────────────────────────────────────────── */
+  .steps {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 10px;
+  }
+
+  .step-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 500;
+    background: var(--step-bg);
+    color: var(--primary);
+    border: 1px solid #c5d8fb;
+    animation: pill-in .3s ease both;
+  }
+  .step-pill.done {
+    background: var(--step-done);
+    color: var(--green);
+    border-color: #b7dfc4;
+  }
+  .step-pill.active .dot {
+    display: inline-block;
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: var(--primary);
+    animation: pulse 1s ease-in-out infinite;
+  }
+  .step-pill.done .dot { display: none; }
+  .step-pill.done::before { content: '✓ '; }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50%       { opacity: .4; transform: scale(.7); }
+  }
+  @keyframes pill-in {
+    from { opacity: 0; transform: translateY(6px) scale(.95); }
+    to   { opacity: 1; transform: translateY(0)   scale(1); }
+  }
+
+  /* ── Reply text ──────────────────────────────────────────── */
+  .reply-text { white-space: pre-wrap; }
+  .reply-text.fade-in { animation: fade-in .35s ease; }
+  @keyframes fade-in {
+    from { opacity: 0; transform: translateY(4px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  /* ── Links inside replies ───────────────────────────────────── */
+  .reply-text a {
+    color: var(--primary);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    word-break: break-all;
+  }
+  .reply-text a:hover { color: var(--primary-dk); }
+
+  /* ── Intent badge ────────────────────────────────────────── */
+  .intent-badge {
+    display: inline-block;
+    margin-top: 8px;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 10.5px;
+    font-weight: 600;
+    letter-spacing: .4px;
+    text-transform: uppercase;
+    background: #f0f4f9;
+    color: var(--muted);
+    border: 1px solid var(--border);
+  }
+
+  /* ── Typing dots (initial state before any step) ─────────── */
+  .typing { display: flex; align-items: center; gap: 4px; padding: 4px 2px; }
+  .typing span {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: var(--muted);
+    animation: bounce .9s ease-in-out infinite;
+  }
+  .typing span:nth-child(2) { animation-delay: .15s; }
+  .typing span:nth-child(3) { animation-delay: .30s; }
+  @keyframes bounce {
+    0%, 80%, 100% { transform: translateY(0); }
+    40%           { transform: translateY(-6px); }
+  }
+
+  /* ── Error state ─────────────────────────────────────────── */
+  .error-text { color: #d93025; font-size: 13px; }
+
+  /* ── Input bar ───────────────────────────────────────────── */
+  .input-area {
+    padding: 14px 16px;
+    border-top: 1px solid var(--border);
+    background: var(--surface);
+    display: flex;
+    gap: 10px;
+    align-items: flex-end;
+    flex-shrink: 0;
+  }
+  #msg-input {
+    flex: 1;
+    resize: none;
+    border: 1.5px solid var(--border);
+    border-radius: 24px;
+    padding: 10px 16px;
+    font-size: 14.5px;
+    font-family: inherit;
+    color: var(--text);
+    background: var(--bg);
+    outline: none;
+    max-height: 120px;
+    overflow-y: auto;
+    transition: border-color .2s;
+    line-height: 1.4;
+  }
+  #msg-input:focus { border-color: var(--primary); background: #fff; }
+  #msg-input::placeholder { color: var(--muted); }
+
+  #send-btn {
+    width: 42px; height: 42px;
+    border-radius: 50%;
+    border: none;
+    background: var(--primary);
+    color: #fff;
+    font-size: 18px;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: background .2s, transform .1s;
+    flex-shrink: 0;
+  }
+  #send-btn:hover:not(:disabled) { background: var(--primary-dk); }
+  #send-btn:active:not(:disabled) { transform: scale(.93); }
+  #send-btn:disabled { background: #b0c4e3; cursor: not-allowed; }
+
+  /* ── Welcome card ────────────────────────────────────────── */
+  .welcome {
+    align-self: center;
+    text-align: center;
+    padding: 32px 24px;
+    max-width: 460px;
+  }
+  .welcome .big-icon { font-size: 52px; margin-bottom: 12px; }
+  .welcome h2 { font-size: 20px; font-weight: 700; margin-bottom: 6px; color: var(--text); }
+  .welcome p  { font-size: 14px; color: var(--muted); line-height: 1.6; margin-bottom: 18px; }
+  .suggestions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+  .suggestion-chip {
+    padding: 7px 14px;
+    border: 1.5px solid var(--border);
+    border-radius: 20px;
+    font-size: 13px;
+    color: var(--primary);
+    cursor: pointer;
+    background: var(--surface);
+    transition: background .15s, border-color .15s;
+    font-family: inherit;
+  }
+  .suggestion-chip:hover { background: var(--step-bg); border-color: var(--primary); }
+
+  /* ── Scrollbar ───────────────────────────────────────────── */
+  #chat::-webkit-scrollbar { width: 5px; }
+  #chat::-webkit-scrollbar-track { background: transparent; }
+  #chat::-webkit-scrollbar-thumb { background: #cdd5e0; border-radius: 4px; }
+</style>
+</head>
+<body>
+<div class="shell">
+
+  <!-- Header -->
+  <header>
+    <div class="header-icon">🎁</div>
+    <div>
+      <div class="header-title">Gift Concierge</div>
+      <div class="header-sub">kapruka.com · AI-Powered Gift Discovery</div>
+    </div>
+    <div class="header-badge">LIVE</div>
+  </header>
+
+  <!-- Chat messages -->
+  <div id="chat">
+    <div class="welcome" id="welcome-card">
+      <div class="big-icon">🎁</div>
+      <h2>Your Personal Gift Concierge</h2>
+      <p>I remember your recipients' preferences, find personalised gifts from kapruka.com, and check delivery across all Sri Lankan districts.</p>
+      <div class="suggestions">
+        <button class="suggestion-chip" onclick="sendSuggestion(this)">Find a birthday gift for my wife</button>
+        <button class="suggestion-chip" onclick="sendSuggestion(this)">My mum loves flowers, budget LKR 3000</button>
+        <button class="suggestion-chip" onclick="sendSuggestion(this)">Can you deliver to Kandy?</button>
+        <button class="suggestion-chip" onclick="sendSuggestion(this)">Hi, what can you help me with?</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Input bar -->
+  <div class="input-area">
+    <textarea id="msg-input" rows="1" placeholder="Ask me to find a gift, save preferences, or check delivery…"></textarea>
+    <button id="send-btn" onclick="sendMessage()" title="Send">
+      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+    </button>
+  </div>
+
+</div>
+
+<script>
+// ── State ──────────────────────────────────────────────────────
+const SESSION_ID = crypto.randomUUID();
+const USER_ID    = 'user_' + Math.random().toString(36).slice(2, 8);
+let   busy       = false;
+
+// ── Step metadata ──────────────────────────────────────────────
+const STEP_META = {
+  memory:     { icon: '🧠', label: 'Recalling memory'      },
+  routing:    { icon: '🎯', label: 'Understanding request'  },
+  searching:  { icon: '🔍', label: 'Searching catalog'      },
+  reflecting: { icon: '🛡️', label: 'Checking safety'        },
+  saving:     { icon: '💾', label: 'Saving preferences'     },
+  logistics:  { icon: '🚚', label: 'Checking delivery'      },
+  thinking:   { icon: '💭', label: 'Thinking'               },
+};
+
+// ── DOM helpers ────────────────────────────────────────────────
+const $chat  = document.getElementById('chat');
+const $input = document.getElementById('msg-input');
+const $send  = document.getElementById('send-btn');
+
+function scrollBottom() {
+  $chat.scrollTop = $chat.scrollHeight;
+}
+
+function removeWelcome() {
+  const w = document.getElementById('welcome-card');
+  if (w) w.remove();
+}
+
+// ── Add user bubble ────────────────────────────────────────────
+function addUserMsg(text) {
+  const el = document.createElement('div');
+  el.className = 'msg user';
+  el.innerHTML = `
+    <div class="avatar">👤</div>
+    <div class="bubble">${escHtml(text)}</div>`;
+  $chat.appendChild(el);
+  scrollBottom();
+}
+
+// ── Add pending agent bubble (returns handle object) ──────────
+function addAgentPending() {
+  const el = document.createElement('div');
+  el.className = 'msg agent';
+  el.innerHTML = `
+    <div class="avatar">🎁</div>
+    <div class="bubble" id="pending-bubble">
+      <div class="typing"><span></span><span></span><span></span></div>
+    </div>`;
+  $chat.appendChild(el);
+  scrollBottom();
+
+  const bubble   = el.querySelector('#pending-bubble');
+  const stepsDiv = document.createElement('div');
+  stepsDiv.className = 'steps';
+  let   activeKey = null;
+
+  function addStep(key, label) {
+    // Mark previous step done
+    if (activeKey) {
+      const prev = bubble.querySelector(`[data-key="${activeKey}"]`);
+      if (prev) { prev.classList.remove('active'); prev.classList.add('done'); }
+    }
+    // Remove typing dots on first step
+    const typing = bubble.querySelector('.typing');
+    if (typing) typing.remove();
+    if (!bubble.contains(stepsDiv)) bubble.prepend(stepsDiv);
+
+    const meta  = STEP_META[key] || { icon: '⚙️', label };
+    const pill  = document.createElement('span');
+    pill.className   = 'step-pill active';
+    pill.dataset.key = key;
+    pill.innerHTML   = `${meta.icon} ${escHtml(meta.label)} <span class="dot"></span>`;
+    stepsDiv.appendChild(pill);
+    activeKey = key;
+    scrollBottom();
+  }
+
+  function finalize(text, intent, confidence) {
+    // Mark last step done
+    if (activeKey) {
+      const prev = bubble.querySelector(`[data-key="${activeKey}"]`);
+      if (prev) { prev.classList.remove('active'); prev.classList.add('done'); }
+    }
+    const typing = bubble.querySelector('.typing');
+    if (typing) typing.remove();
+
+    // Reply text
+    const replyEl = document.createElement('div');
+    replyEl.className = 'reply-text fade-in';
+    replyEl.innerHTML = linkify(text);
+    bubble.appendChild(replyEl);
+
+    // Intent badge
+    if (intent) {
+      const badge = document.createElement('div');
+      badge.className   = 'intent-badge';
+      badge.textContent = intent.replace('_', ' ') + (confidence ? `  ${Math.round(confidence*100)}%` : '');
+      bubble.appendChild(badge);
+    }
+
+    bubble.removeAttribute('id');
+    scrollBottom();
+  }
+
+  function showError(msg) {
+    const typing = bubble.querySelector('.typing');
+    if (typing) typing.remove();
+    const err = document.createElement('div');
+    err.className   = 'error-text';
+    err.textContent = '⚠️ ' + msg;
+    bubble.appendChild(err);
+    bubble.removeAttribute('id');
+    scrollBottom();
+  }
+
+  return { addStep, finalize, showError };
+}
+
+// ── Core send ──────────────────────────────────────────────────
+async function sendMessage() {
+  const text = $input.value.trim();
+  if (!text || busy) return;
+
+  busy = true;
+  $send.disabled = true;
+  $input.value   = '';
+  autoResize();
+  removeWelcome();
+
+  addUserMsg(text);
+  const handle = addAgentPending();
+
+  try {
+    const res = await fetch('/chat', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ message: text, user_id: USER_ID, session_id: SESSION_ID }),
+    });
+
+    if (!res.ok) throw new Error(`Server error: ${res.status}`);
+
+    const reader  = res.body.getReader();
+    const decoder = new TextDecoder();
+    let   buf     = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+
+      // Parse SSE frames
+      const frames = buf.split('\n\n');
+      buf = frames.pop();             // keep incomplete last chunk
+
+      for (const frame of frames) {
+        const line = frame.trim();
+        if (!line.startsWith('data:')) continue;
+        const raw = line.slice(5).trim();
+        let evt;
+        try { evt = JSON.parse(raw); } catch { continue; }
+
+        if (evt.type === 'step') {
+          handle.addStep(evt.step, evt.label);
+        } else if (evt.type === 'reply') {
+          handle.finalize(evt.text, evt.intent, evt.confidence);
+        } else if (evt.type === 'error') {
+          handle.showError(evt.text || 'Something went wrong.');
+        }
+      }
+    }
+  } catch (err) {
+    handle.showError(err.message || 'Connection failed.');
+  } finally {
+    busy = false;
+    $send.disabled = false;
+    $input.focus();
+  }
+}
+
+// ── Suggestion chips ───────────────────────────────────────────
+function sendSuggestion(btn) {
+  $input.value = btn.textContent;
+  sendMessage();
+}
+
+// ── Auto-resize textarea ───────────────────────────────────────
+function autoResize() {
+  $input.style.height = 'auto';
+  $input.style.height = Math.min($input.scrollHeight, 120) + 'px';
+}
+
+$input.addEventListener('input',   autoResize);
+$input.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+});
+
+// ── Escape HTML ────────────────────────────────────────────────
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ── Linkify — turn URLs into clickable anchors ─────────────────
+function linkify(text) {
+  const escaped = escHtml(text);
+  return escaped.replace(
+    /(https?:\/\/[^\s&<>"]+?)([).,'":;!?]*(?:\s|$))/g,
+    '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>$2'
+  );
+}
+</script>
+</body>
+</html>

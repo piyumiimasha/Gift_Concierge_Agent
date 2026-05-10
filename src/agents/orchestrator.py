@@ -118,6 +118,93 @@ class GiftOrchestrator:
     # Main entry point
     # ------------------------------------------------------------------
 
+    def chat_stream(
+        self,
+        user_id: str,
+        session_id: str,
+        message: str,
+    ):
+        """
+        Generator that yields step-event dicts followed by a single reply dict.
+
+        Step dict:  {"type": "step",  "step": <key>, "label": <display text>}
+        Reply dict: {"type": "reply", "intent": ..., "confidence": ...,
+                     "text": ..., "metadata": {...}}
+        """
+        # Step 1 — load context
+        yield {"type": "step", "step": "memory", "label": "Recalling memory..."}
+        history  = self._st.recent(user_id, session_id, k=self.max_history_turns)
+        profiles = self._profiles.list_profiles(user_id)
+
+        # Step 2 — classify intent
+        yield {"type": "step", "step": "routing", "label": "Understanding your request..."}
+        router_result = self._get_router().classify(message, history[-3:])
+        intent = router_result.intent
+
+        # Step 3 — dispatch with per-intent step hints
+        if intent == "search":
+            yield {"type": "step", "step": "searching", "label": "Searching gift catalog..."}
+            profile: Optional[RecipientProfile] = None
+            if router_result.recipient_hint:
+                profile = self._profiles.get(user_id, router_result.recipient_hint)
+            if profile is None and len(profiles) == 1:
+                profile = profiles[0]
+            # Pre-announce reflection if the profile has dislikes/notes
+            if profile and (profile.dislikes or profile.notes):
+                yield {"type": "step", "step": "reflecting", "label": "Checking gift safety..."}
+            response = self._get_catalog().recommend(message, profile, history)
+            reply = response.reply
+            metadata = {
+                "products_retrieved":   len(response.products_shown),
+                "query_enriched":       response.query_used,
+                "recipient":            response.recipient_name,
+                "reflection_triggered": response.reflection_triggered,
+                "violations_found":     response.violations_found,
+            }
+
+        elif intent == "preference_update":
+            yield {"type": "step", "step": "saving", "label": "Saving preferences..."}
+            reply, metadata = self._handle_preference_update(
+                user_id, message, router_result, profiles
+            )
+
+        elif intent == "logistics_check":
+            yield {"type": "step", "step": "logistics", "label": "Checking delivery zones..."}
+            log_resp = self._get_logistics().check(
+                message, district_hint=router_result.district_hint
+            )
+            reply = log_resp.reply
+            metadata = {
+                "district": log_resp.district,
+                "feasible": log_resp.feasibility.feasible if log_resp.feasibility else None,
+            }
+
+        else:  # chitchat
+            yield {"type": "step", "step": "thinking", "label": "Thinking..."}
+            reply = self._handle_chitchat(message, profiles)
+            metadata = {}
+
+        # Step 4 — persist both turns
+        now = time.time()
+        self._st.append(
+            ConversationTurn(user_id, session_id, "user", message, now),
+            max_turns=self.st_max_turns,
+            ttl_seconds=self.st_ttl_seconds,
+        )
+        self._st.append(
+            ConversationTurn(user_id, session_id, "assistant", reply, now + 0.001),
+            max_turns=self.st_max_turns,
+            ttl_seconds=self.st_ttl_seconds,
+        )
+
+        yield {
+            "type":       "reply",
+            "intent":     intent,
+            "confidence": router_result.confidence,
+            "text":       reply,
+            "metadata":   metadata,
+        }
+
     @observe(name="orchestrator_chat")
     def chat(
         self,
