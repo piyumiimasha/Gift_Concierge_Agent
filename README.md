@@ -5,7 +5,7 @@ An AI-powered gift recommendation assistant for [kapruka.com](https://www.kapruk
 The agent finds personalised gifts, remembers recipient preferences, checks delivery across all Sri Lankan districts, and ensures gift safety through a reflection loop.
 
 ---
-
+![alt text](2026-05-11-1.png)
 ## Architecture Overview
 
 ```
