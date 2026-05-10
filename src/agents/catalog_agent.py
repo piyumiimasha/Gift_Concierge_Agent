@@ -93,7 +93,7 @@ class CatalogAgent:
         rag_store: QdrantRAGStore,
         model: str = "llama-3.3-70b-versatile",
         k: int = 8,
-        threshold: float = 0.45,
+        threshold: float = 0.30,
         temperature: float = 0.7,
     ) -> None:
         api_key = os.getenv("GROQ_API_KEY", "").strip()

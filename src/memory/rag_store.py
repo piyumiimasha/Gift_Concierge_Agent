@@ -16,7 +16,7 @@ Semantic search flow
     OpenRouterEmbedder.embed_one(query)  → 1 536-dim vector
          │
          ▼
-    Qdrant.search(collection, vector,    → top-k points by cosine sim
+    Qdrant.query_points(collection, vector, → top-k points by cosine sim
                   filter=category)
          │
          ▼
@@ -187,14 +187,15 @@ class QdrantRAGStore:
             )
 
         try:
-            hits = self._client.search(
+            response = self._client.query_points(
                 collection_name=self.collection_name,
-                query_vector=query_vector,
+                query=query_vector,
                 limit=k,
                 score_threshold=threshold,
                 query_filter=qdrant_filter,
                 with_payload=True,
             )
+            hits = response.points
         except Exception as exc:
             logger.error("Qdrant search failed: {}", exc)
             return []
@@ -269,7 +270,17 @@ class QdrantRAGStore:
                 distance=qmodels.Distance.COSINE,
             ),
         )
+        self._ensure_indexes()
         logger.success("Created Qdrant collection '{}'", self.collection_name)
+
+    def _ensure_indexes(self) -> None:
+        """Create payload indexes required for filtered search."""
+        self._client.create_payload_index(
+            collection_name=self.collection_name,
+            field_name="category",
+            field_schema=qmodels.PayloadSchemaType.KEYWORD,
+        )
+        logger.info("Payload index created for 'category'")
 
     def delete_collection(self) -> None:
         """Drop the entire collection. Use with caution."""
